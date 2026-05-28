@@ -634,6 +634,13 @@ input:focus {
   margin-bottom: 24px;
 }
 
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .auth-shell {
   display: grid;
   align-content: center;
@@ -656,10 +663,62 @@ input:focus {
   line-height: 1.45;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(4, 8, 7, 0.72);
+  backdrop-filter: blur(7px);
+}
+
+.rules-modal {
+  width: min(760px, 100%);
+  max-height: min(760px, 92vh);
+  overflow: auto;
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid rgba(255, 224, 169, 0.2);
+  border-radius: 14px;
+  color: #f4ead7;
+  background: #141c17;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.44);
+}
+
+.modal-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.close-button {
+  min-height: 38px;
+  padding: 9px 12px;
+}
+
+.rules-list {
+  display: grid;
+  gap: 10px;
+  color: #dac8aa;
+  line-height: 1.5;
+}
+
 @media (max-width: 900px) {
   .topbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .top-actions {
+    justify-content: stretch;
+  }
+
+  .top-actions .secondary {
+    flex: 1;
   }
 }
 

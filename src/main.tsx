@@ -48,6 +48,7 @@ function App() {
   const [error, setError] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   const roomIdFromUrl = useMemo(() => window.location.pathname.match(/\/room\/([A-Za-z0-9]+)/)?.[1]?.toUpperCase() ?? "", []);
   const self = room?.players.find((player) => player.isYou);
@@ -124,8 +125,10 @@ function App() {
         <section className="setup-panel auth-panel">
           <label className="field"><span>Ваше имя</span><input value={playerName} onChange={(event) => setPlayerName(event.target.value)} placeholder="Например, Макс" /></label>
           {roomIdFromUrl ? <button className="primary" onClick={joinRoom}>Войти в комнату {roomIdFromUrl}</button> : <button className="primary" onClick={createRoom}>Создать комнату</button>}
+          <button className="secondary" type="button" onClick={() => setShowRules(true)}>Правила</button>
           {error && <p className="error">{error}</p>}
         </section>
+        {showRules && <RulesModal onClose={() => setShowRules(false)} />}
       </main>
     );
   }
@@ -134,7 +137,10 @@ function App() {
     <main className="app-shell">
       <header className="topbar">
         <div><p className="eyebrow">Комната {room.id}</p><h1>Козел 32</h1><p className="muted">Вы: <strong>{self?.name}</strong></p></div>
-        <button className="secondary" onClick={copyInvite}>{copied ? "Ссылка скопирована" : "Пригласить"}</button>
+        <div className="top-actions">
+          <button className="secondary" onClick={copyInvite}>{copied ? "Ссылка скопирована" : "Пригласить"}</button>
+          <button className="secondary" type="button" onClick={() => setShowRules(true)}>Правила</button>
+        </div>
       </header>
       {error && <p className="error">{error}</p>}
       <section className="game-layout">
@@ -156,6 +162,7 @@ function App() {
           {room.phase === "game_over" && <GameOver room={room} isHost={isHost} />}
         </section>
       </section>
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
     </main>
   );
 }
@@ -192,6 +199,31 @@ function RoundResult({ room, isHost }: { room: RoomSnapshot; isHost: boolean }) 
 function GameOver({ room, isHost }: { room: RoomSnapshot; isHost: boolean }) {
   const winner = room.summary?.instantWinnerId ? room.summary.instantName : room.players.find((player) => !player.eliminated)?.name;
   return <div className="result-panel finale"><p className="eyebrow">Финал</p><h2>{winner ?? "Партия завершена"}</h2><p className="notice">{room.message}</p><div className="result-grid">{room.players.map((player) => <div className="result-row" key={player.id}><strong>{player.name}</strong><span>{player.eliminated ? "выбыл" : "в игре"}</span><b>{player.penalty}</b></div>)}</div>{isHost && <button className="primary" onClick={() => socket.emit("game:start", { roomId: room.id })}>Новая партия</button>}</div>;
+}
+
+function RulesModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Правила игры">
+      <section className="rules-modal">
+        <div className="modal-title">
+          <h2>Правила</h2>
+          <button className="secondary close-button" type="button" onClick={onClose}>Закрыть</button>
+        </div>
+        <div className="rules-list">
+          <p>Играют 2-4 человека. Колода 32 карты: от девятки до туза. Козырь всегда бубны.</p>
+          <p>Цель партии - набрать меньше штрафных баллов. Игрок с 12 штрафами выбывает, последний оставшийся выигрывает.</p>
+          <p>В раунде каждому раздают по 4 карты. Ходить можно одной картой или несколькими картами одной масти.</p>
+          <p>Отвечающий должен выбрать столько же карт: побить ход или сбросить карты рубашкой вверх. Сбросы нельзя смотреть до итогов.</p>
+          <p>Козырь бьет любую некозырную карту, но не старший козырь. Победитель взятки забирает все карты в скрытый банк.</p>
+          <p>После взятки игроки добирают до 4 карт, пока есть колода. Очки банка раскрываются только в конце раунда.</p>
+          <p>Очки карт: 9=0, валет=2, дама=3, король=4, 10=10, туз=11. Всего в раунде 120 очков.</p>
+          <p>0 очков дает 6 штрафов. Меньше 31 очка дает 4 штрафа. Среди игроков с 31+ очками лидер получает 0, остальные получают 2.</p>
+          <p>Если у всех равные очки, это "яйца": штрафов нет. Четыре девятки или четыре туза в руке дают моментальную победу.</p>
+          <p>Четыре козыря дают внеочередной ход всеми 4 козырями. Такой ход нельзя побить, остальные только сбрасывают.</p>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function CardView({ card, faceDown, mini }: { card: Card; faceDown?: boolean; mini?: boolean }) {
