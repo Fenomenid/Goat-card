@@ -14,7 +14,7 @@ const app = express();
 app.get("/health", (_req, res) => res.json({ ok: true }));
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(clientDistPath));
-  app.get("*", (_req, res) => res.sendFile(path.join(clientDistPath, "index.html")));
+  app.use((_req, res) => res.sendFile(path.join(clientDistPath, "index.html")));
 }
 
 const server = http.createServer(app);
