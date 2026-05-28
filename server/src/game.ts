@@ -34,6 +34,8 @@ export type Room = {
   lastTrickWinnerId?: string;
   message: string;
   pendingTrickWinnerId?: string;
+  forceTrumpLeadPlayerId?: string;
+  unbeatableLead?: boolean;
   summary?: RoundSummary;
 };
 export type PlayerView = Omit<Player, "hand" | "bank"> & { handCount: number; bankPoints?: number; isYou: boolean };
@@ -144,6 +146,16 @@ export class GameManager {
     if (room.leadCards.length > 0) throw new GameError("Сейчас нужно отвечать на ход");
     const { selected, rest } = takeCards(player.hand, cardIds);
     if (!sameSuit(selected)) throw new GameError("Ходить можно одной мастью");
+    if (room.forceTrumpLeadPlayerId) {
+      if (room.forceTrumpLeadPlayerId !== player.id) throw new GameError("Сейчас внеочередной ход у игрока с 4 козырями");
+      if (selected.length !== handLimit || !selected.every((card) => card.suit === trump)) {
+        throw new GameError("При 4 козырях нужно ходить всеми козырями");
+      }
+      room.unbeatableLead = true;
+      room.forceTrumpLeadPlayerId = undefined;
+    } else {
+      room.unbeatableLead = false;
+    }
     player.hand = rest;
     room.leaderId = player.id;
     room.currentWinnerId = player.id;
@@ -153,7 +165,9 @@ export class GameManager {
     room.table.push({ playerId: player.id, playerName: player.name, cards: selected, faceDown: false, action: "lead" });
     const nextId = room.responderOrder[0];
     room.activePlayerIndex = nextId ? this.playerIndex(room, nextId) : room.activePlayerIndex;
-    room.message = `${player.name} сделал ход. ${room.players[room.activePlayerIndex].name} отвечает.`;
+    room.message = room.unbeatableLead
+      ? `${player.name} ходит 4 козырями. Этот ход нельзя побить, остальные сбрасывают карты.`
+      : `${player.name} сделал ход. ${room.players[room.activePlayerIndex].name} отвечает.`;
     return room;
   }
 
@@ -200,6 +214,7 @@ export class GameManager {
     const requiredCount = Math.min(room.leadCards.length, player.hand.length);
     const { selected, rest } = takeCards(player.hand, cardIds);
     if (selected.length !== requiredCount) throw new GameError(`Нужно выбрать ${requiredCount} карт`);
+    if (action === "beat" && room.unbeatableLead) throw new GameError("4 козыря нельзя побить, можно только сбросить");
     if (action === "beat" && !canBeatSet(room.leadCards, selected)) throw new GameError("Этими картами нельзя побить ход");
     player.hand = rest;
     if (action === "beat") room.currentWinnerId = player.id;
@@ -244,11 +259,19 @@ export class GameManager {
     room.responderCursor = 0;
     room.table = [];
     room.pendingTrickWinnerId = undefined;
+    room.unbeatableLead = false;
+    room.forceTrumpLeadPlayerId = undefined;
     room.phase = "playing";
     room.message = `${winner.name} забирает взятку и ходит следующим.`;
 
     if (room.deck.length === 0 && this.activePlayers(room).every((player) => player.hand.length === 0)) {
       return this.finishRound(room);
+    }
+    const fourTrumpPlayer = this.findFourTrumpPlayer(room);
+    if (fourTrumpPlayer) {
+      room.activePlayerIndex = this.playerIndex(room, fourTrumpPlayer.id);
+      room.forceTrumpLeadPlayerId = fourTrumpPlayer.id;
+      room.message = `${fourTrumpPlayer.name} собрал 4 козыря и ходит вне очереди. Такой ход нельзя побить.`;
     }
     return room;
   }
@@ -262,6 +285,8 @@ export class GameManager {
     room.leadCards = [];
     room.responderOrder = [];
     room.responderCursor = 0;
+    room.forceTrumpLeadPlayerId = undefined;
+    room.unbeatableLead = false;
     room.summary = undefined;
     room.players = room.players.map((player) => ({ ...player, hand: [], bank: [] }));
     for (let cardNo = 0; cardNo < handLimit; cardNo += 1) {
@@ -279,6 +304,7 @@ export class GameManager {
 
     const fourTrump = room.players.find((player) => !player.eliminated && hasFourTrumps(player));
     room.activePlayerIndex = fourTrump ? this.playerIndex(room, fourTrump.id) : this.nextActiveIndex(room, dealerIndex);
+    room.forceTrumpLeadPlayerId = fourTrump?.id;
     room.message = fourTrump
       ? `${fourTrump.name} собрал 4 козыря и ходит вне очереди. Такой ход нельзя побить.`
       : `Первым ходит ${room.players[room.activePlayerIndex].name}.`;
@@ -359,6 +385,10 @@ export class GameManager {
   private playerIndex(room: Room, playerId: string) {
     const index = room.players.findIndex((player) => player.id === playerId);
     return index >= 0 ? index : 0;
+  }
+
+  private findFourTrumpPlayer(room: Room) {
+    return room.players.find((player) => !player.eliminated && hasFourTrumps(player));
   }
 
   private createRoomId() {

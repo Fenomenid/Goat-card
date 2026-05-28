@@ -29,6 +29,8 @@ type RoomSnapshot = {
   roundNo: number;
   lastTrickWinnerId?: string;
   message: string;
+  forceTrumpLeadPlayerId?: string;
+  unbeatableLead?: boolean;
   summary?: RoundSummary;
   inviteUrl?: string;
 };
@@ -51,13 +53,15 @@ function App() {
   const self = room?.players.find((player) => player.isYou);
   const isHost = Boolean(self?.isHost);
   const currentPlayer = room?.players[room.activePlayerIndex];
-  const isMyTurn = Boolean(room && currentPlayer?.id === room.selfId && (room.phase === "playing" || room.phase === "trick_result"));
+  const isMyTurn = Boolean(room && currentPlayer?.id === room.selfId && room.phase === "playing");
   const selectedCards = room ? room.selfHand.filter((card) => selectedIds.includes(card.id)) : [];
   const isLeading = Boolean(room && room.leadCards.length === 0);
   const requiredCount = room ? Math.min(room.leadCards.length, room.selfHand.length) : 0;
-  const canLead = isMyTurn && isLeading && selectedCards.length > 0 && sameSuit(selectedCards);
+  const mustLeadFourTrumps = Boolean(room && room.forceTrumpLeadPlayerId === room.selfId && isLeading);
+  const selectedAllTrumpHand = Boolean(room && selectedCards.length === room.selfHand.length && selectedCards.every((card) => card.suit === trump));
+  const canLead = isMyTurn && isLeading && selectedCards.length > 0 && sameSuit(selectedCards) && (!mustLeadFourTrumps || selectedAllTrumpHand);
   const canDiscard = isMyTurn && !isLeading && selectedCards.length === requiredCount;
-  const canBeat = isMyTurn && !isLeading && canBeatSet(room?.leadCards ?? [], selectedCards);
+  const canBeat = isMyTurn && !isLeading && !room?.unbeatableLead && canBeatSet(room?.leadCards ?? [], selectedCards);
 
   useEffect(() => {
     socket.on("room", (snapshot: RoomSnapshot) => {
@@ -145,7 +149,7 @@ function App() {
             <>
               <div className="table-topline"><div><p className="eyebrow">Ход</p><h2>{currentPlayer?.isYou ? "Ваш ход" : currentPlayer?.name}</h2></div><p className="notice">{room.message}</p></div>
               <FeltTable table={room.table} resolving={room.phase === "trick_result"} />
-              {room.phase === "playing" && <HandPanel hand={room.selfHand} selectedIds={selectedIds} isMyTurn={isMyTurn} isLeading={isLeading} requiredCount={requiredCount} canLead={canLead} canBeat={canBeat} canDiscard={canDiscard} onToggle={toggleCard} onLead={() => emitAction("cards:lead")} onBeat={() => emitAction("cards:beat")} onDiscard={() => emitAction("cards:discard")} />}
+              {room.phase === "playing" && <HandPanel hand={room.selfHand} selectedIds={selectedIds} isMyTurn={isMyTurn} isLeading={isLeading} requiredCount={requiredCount} mustLeadFourTrumps={mustLeadFourTrumps} unbeatableLead={Boolean(room.unbeatableLead)} canLead={canLead} canBeat={canBeat} canDiscard={canDiscard} onToggle={toggleCard} onLead={() => emitAction("cards:lead")} onBeat={() => emitAction("cards:beat")} onDiscard={() => emitAction("cards:discard")} />}
             </>
           )}
           {room.phase === "round_result" && <RoundResult room={room} isHost={isHost} />}
@@ -164,8 +168,14 @@ function FeltTable({ table, resolving }: { table: TableEntry[]; resolving: boole
   return <div className={`felt-table ${resolving ? "resolving" : ""}`}><div className="table-center">{table.length === 0 ? <p className="empty-table">Стол пуст</p> : table.map((entry, index) => <div className={`trick-entry ${entry.action}`} key={`${entry.playerId}-${index}`} style={{ animationDelay: `${index * 80}ms` }}><span>{entry.playerName}: {entry.action === "lead" ? "ход" : entry.action === "beat" ? "бьет" : "сброс"}</span><div className="mini-cards">{entry.cards.map((card) => <CardView key={card.id} card={card} faceDown={entry.faceDown} mini />)}</div></div>)}</div></div>;
 }
 
-function HandPanel(props: { hand: Card[]; selectedIds: string[]; isMyTurn: boolean; isLeading: boolean; requiredCount: number; canLead: boolean; canBeat: boolean; canDiscard: boolean; onToggle: (id: string) => void; onLead: () => void; onBeat: () => void; onDiscard: () => void }) {
-  const hint = props.isMyTurn ? (props.isLeading ? "Выберите одну или несколько карт одной масти." : `Выберите ${props.requiredCount} карт, чтобы побить или сбросить.`) : "Ждите своего хода.";
+function HandPanel(props: { hand: Card[]; selectedIds: string[]; isMyTurn: boolean; isLeading: boolean; requiredCount: number; mustLeadFourTrumps: boolean; unbeatableLead: boolean; canLead: boolean; canBeat: boolean; canDiscard: boolean; onToggle: (id: string) => void; onLead: () => void; onBeat: () => void; onDiscard: () => void }) {
+  const hint = !props.isMyTurn
+    ? "Ждите своего хода."
+    : props.mustLeadFourTrumps
+      ? "У вас 4 козыря: выберите все 4 и ходите вне очереди."
+      : props.unbeatableLead
+        ? `4 козыря нельзя побить. Выберите ${props.requiredCount} карт для сброса.`
+        : props.isLeading ? "Выберите одну или несколько карт одной масти." : `Выберите ${props.requiredCount} карт, чтобы побить или сбросить.`;
   return <div className="hand-panel"><div className="hand-header"><div><strong>{hint}</strong><p className="muted">Ваши карты: {props.hand.length}</p></div><div className="actions">{props.isLeading ? <button className="primary" disabled={!props.canLead} onClick={props.onLead}>Сделать ход</button> : <><button className="primary" disabled={!props.canBeat} onClick={props.onBeat}>Побить</button><button className="secondary" disabled={!props.canDiscard} onClick={props.onDiscard}>Сбросить</button></>}</div></div><div className="hand-row">{props.hand.map((card, index) => <button className={`card-button ${props.selectedIds.includes(card.id) ? "selected" : ""}`} key={card.id} disabled={!props.isMyTurn} onClick={() => props.onToggle(card.id)} style={{ animationDelay: `${index * 55}ms` }}><CardView card={card} /></button>)}</div></div>;
 }
 
