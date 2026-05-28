@@ -267,6 +267,14 @@ export class GameManager {
     if (room.deck.length === 0 && this.activePlayers(room).every((player) => player.hand.length === 0)) {
       return this.finishRound(room);
     }
+    const instantWinner = this.findInstantWinner(room);
+    if (instantWinner) {
+      room.phase = "game_over";
+      room.activePlayerIndex = this.playerIndex(room, instantWinner.id);
+      room.summary = { points: {}, penalties: {}, eggs: false, instantWinnerId: instantWinner.id, instantName: instantWinner.name };
+      room.message = hasFourOfRank(instantWinner, "9") ? "Сопливый козел: четыре девятки." : "Генеральский козел: четыре туза.";
+      return room;
+    }
     const fourTrumpPlayer = this.findFourTrumpPlayer(room);
     if (fourTrumpPlayer) {
       room.activePlayerIndex = this.playerIndex(room, fourTrumpPlayer.id);
@@ -293,7 +301,7 @@ export class GameManager {
       for (const player of room.players) if (!player.eliminated) player.hand.push(room.deck.shift()!);
     }
 
-    const instant = room.players.find((player) => !player.eliminated && (hasFourOfRank(player, "9") || hasFourOfRank(player, "A")));
+    const instant = this.findInstantWinner(room);
     if (instant) {
       room.phase = "game_over";
       room.activePlayerIndex = this.playerIndex(room, instant.id);
@@ -389,6 +397,10 @@ export class GameManager {
 
   private findFourTrumpPlayer(room: Room) {
     return room.players.find((player) => !player.eliminated && hasFourTrumps(player));
+  }
+
+  private findInstantWinner(room: Room) {
+    return room.players.find((player) => !player.eliminated && (hasFourOfRank(player, "9") || hasFourOfRank(player, "A")));
   }
 
   private createRoomId() {

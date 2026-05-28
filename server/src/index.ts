@@ -78,7 +78,7 @@ function emitAndMaybeCollect(room: Room) {
     } catch {
       trickTimers.delete(room.id);
     }
-  }, 1800));
+  }, 3200));
 }
 function emitRoom(room: Room) {
   for (const player of room.players) {

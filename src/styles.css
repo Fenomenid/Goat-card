@@ -689,7 +689,7 @@ input:focus {
 }
 
 .felt-table.resolving .trick-entry {
-  animation: trick-hold-then-fly 1.65s ease-in forwards;
+  animation: trick-hold-then-fly 3s ease-in forwards;
 }
 
 .felt-table.resolving .trick-entry.beat .playing-card {
@@ -723,7 +723,7 @@ input:focus {
 }
 
 @keyframes trick-hold-then-fly {
-  0%, 62% {
+  0%, 76% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
